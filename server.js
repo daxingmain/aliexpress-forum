@@ -1,99 +1,104 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
+const https = require('https');
+const http = require('http');
 
-const app = express();
+// ===== Forum Server =====
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, 'data');
-const TOPICS_FILE = path.join(DATA_DIR, 'topics.json');
-const REPLIES_FILE = path.join(DATA_DIR, 'replies.json');
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const forumData = [
+  {
+    id: 1,
+    title: "欢迎加入速卖通招商论坛",
+    author: "管理员",
+    content: "这里是速卖通招商交流平台，欢迎各供应商入驻。",
+    date: "2026-04-01",
+    replies: 0
+  }
+];
 
-function readJSON(file, def) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch { return def; }
+function renderHTML(path) {
+  const isHome = path === '/' || path === '';
+  
+  let body = '';
+  if (isHome) {
+    body = `
+      <h1>🏪 速卖通招商论坛</h1>
+      <p>供应商交流与招商信息发布平台</p>
+      <hr>
+      ${forumData.map(post => `
+        <div style="border:1px solid #ddd;padding:15px;margin:10px 0;border-radius:8px;">
+          <h3><a href="/post/${post.id}">${post.title}</a></h3>
+          <p style="color:#666;">${post.author} · ${post.date} · ${post.replies} 回复</p>
+        </div>
+      `).join('')}
+      <hr>
+      <a href="/new" style="background:#ff6a00;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">发布新帖</a>
+    `;
+  } else if (path.startsWith('/post/')) {
+    const id = parseInt(path.split('/')[2]);
+    const post = forumData.find(p => p.id === id);
+    if (post) {
+      body = `
+        <h1>${post.title}</h1>
+        <p style="color:#666;">${post.author} · ${post.date}</p>
+        <p>${post.content}</p>
+        <a href="/">← 返回列表</a>
+      `;
+    } else {
+      body = '<h1>帖子不存在</h1><a href="/">返回首页</a>';
+    }
+  } else if (path === '/new') {
+    body = `
+      <h1>发布新帖</h1>
+      <form method="POST" action="/new">
+        <input type="text" name="title" placeholder="标题" required style="width:100%;padding:10px;margin:5px 0;"><br>
+        <textarea name="content" placeholder="内容" rows="6" required style="width:100%;padding:10px;margin:5px 0;"></textarea><br>
+        <button type="submit" style="background:#ff6a00;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;">发布</button>
+      </form>
+      <br><a href="/">← 返回列表</a>
+    `;
+  } else {
+    body = '<h1>404 - 页面不存在</h1><a href="/">返回首页</a>';
+  }
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>速卖通招商论坛</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    a { color: #ff6a00; }
+    input, textarea { border: 1px solid #ddd; border-radius: 5px; }
+  </style>
+</head>
+<body>${body}</body>
+</html>`;
 }
-function writeJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
-}
 
-// Init default data
-if (!fs.existsSync(TOPICS_FILE)) {
-  const defaults = readJSON(path.join(__dirname, 'default-topics.json'), []);
-  writeJSON(TOPICS_FILE, defaults);
-  writeJSON(REPLIES_FILE, [
-    {"id":1,"tid":3,"author":"扫地僧","role":"admin","ts":"2026-03-31 09:30",
-     "content":{"zh":"可以的！中国主体入驻海外托管：\n\n1. **主体要求**：企业入驻（支持企业支付宝或法人支付宝认证）\n2. **保证金**：10,000 元人民币\n3. **备货地**：美国 FBA 完全符合要求\n4. **VAT**：需要校验发货国的税务资质\n\n入驻流程：\n1. 用自运营店铺账号登录后台\n2. 选择\"开通海外托管店铺\"\n3. 签署协议、绑定邮箱\n4. 缴纳保证金\n5. 开通成功",
-     "en":"Yes! Chinese entities can join:\n\n1. **Entity**: Enterprise (supports enterprise Alipay or legal person Alipay)\n2. **Deposit**: 10,000 RMB\n3. **Warehouse**: US FBA fully qualifies\n4. **VAT**: Tax qualification of shipping country required\n\nProcess:\n1. Login with self-operated store account\n2. Select \"Open Overseas Hosting Store\"\n3. Sign agreement, bind email\n4. Pay deposit\n5. Done!",
-     "es":"¡Sí! Las empresas chinas pueden unirse:\n\n1. **Entidad**: Empresa (Alipay empresarial)\n2. **Depósito**: 10,000 RMB\n3. **Almacén**: FBA en EE.UU. califica\n4. **VAT**: Calificación fiscal requerida",
-     "fr":"Oui ! Les entreprises chinoises peuvent rejoindre :\n\n1. **Entité** : Entreprise (Alipay d'entreprise)\n2. **Dépôt** : 10 000 RMB\n3. **Entrepôt** : FBA aux États-Unis qualifie\n4. **VAT** : Qualification fiscale requise",
-     "de":"Ja! Chinesische Unternehmen können beitreten:\n\n1. **Einheit**: Unternehmen (Enterprise Alipay)\n2. **Kaution**: 10.000 RMB\n3. **Lager**: US FBA qualifiziert\n4. **VAT**: Steuerqualifikation erforderlich",
-     "pl":"Tak! Chińskie firmy mogą dołączyć:\n\n1. **Podmiot**: Przedsiębiorstwo (Alipay przedsiębiorstwa)\n2. **Kaucja**: 10 000 RMB\n3. **Magazyn**: US FBA kwalifikuje się\n4. **VAT**: Wymagana kwalifikacja podatkowa"}}
-  ]);
-}
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-
-// API: Get topics
-app.get('/api/topics', (req, res) => {
-  const topics = readJSON(TOPICS_FILE, []);
-  const cat = req.query.cat;
-  const filtered = cat ? topics.filter(t => t.cat === parseInt(cat)) : topics;
-  const sorted = filtered.sort((a, b) => {
-    if (a.pin && !b.pin) return -1;
-    if (!a.pin && b.pin) return 1;
-    return new Date(b.ts) - new Date(a.ts);
-  });
-  res.json(sorted);
+const server = http.createServer((req, res) => {
+  if (req.method === 'POST' && req.url === '/new') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      const params = new URLSearchParams(body);
+      forumData.unshift({
+        id: forumData.length + 1,
+        title: params.get('title'),
+        author: '匿名用户',
+        content: params.get('content'),
+        date: new Date().toISOString().split('T')[0],
+        replies: 0
+      });
+      res.writeHead(302, { Location: '/' });
+      res.end();
+    });
+  } else {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(renderHTML(req.url));
+  }
 });
 
-// API: Get topic detail
-app.get('/api/topics/:id', (req, res) => {
-  const topics = readJSON(TOPICS_FILE, []);
-  const topic = topics.find(t => t.id === parseInt(req.params.id));
-  if (!topic) return res.status(404).json({ error: 'Not found' });
-  topic.views++;
-  writeJSON(TOPICS_FILE, topics);
-  const replies = readJSON(REPLIES_FILE, []).filter(r => r.tid === topic.id);
-  res.json({ topic, replies });
-});
-
-// API: Create topic
-app.post('/api/topics', (req, res) => {
-  const { cat, title, author, lang, content } = req.body;
-  if (!cat || !title || !author || !content) return res.status(400).json({ error: 'Missing fields' });
-  const topics = readJSON(TOPICS_FILE, []);
-  const id = topics.length ? Math.max(...topics.map(t => t.id)) + 1 : 1;
-  topics.push({ id, cat: parseInt(cat), pin: 0, res: 0, views: 0, rp: 0, author, role: 'merchant', ts: new Date().toISOString().slice(0, 16).replace('T', ' '), title: { [lang]: title }, content: { [lang]: content } });
-  writeJSON(TOPICS_FILE, topics);
-  res.json({ id, message: 'OK' });
-});
-
-// API: Reply to topic
-app.post('/api/topics/:id/replies', (req, res) => {
-  const { author, lang, content } = req.body;
-  if (!author || !content) return res.status(400).json({ error: 'Missing fields' });
-  const replies = readJSON(REPLIES_FILE, []);
-  const id = replies.length ? Math.max(...replies.map(r => r.id)) + 1 : 1;
-  replies.push({ id, tid: parseInt(req.params.id), author, role: 'merchant', ts: new Date().toISOString().slice(0, 16).replace('T', ' '), content: { [lang]: content } });
-  writeJSON(REPLIES_FILE, replies);
-  const topics = readJSON(TOPICS_FILE, []);
-  const topic = topics.find(t => t.id === parseInt(req.params.id));
-  if (topic) topic.rp++;
-  writeJSON(TOPICS_FILE, topics);
-  res.json({ id, message: 'OK' });
-});
-
-// API: Stats
-app.get('/api/stats', (req, res) => {
-  const topics = readJSON(TOPICS_FILE, []);
-  const replies = readJSON(REPLIES_FILE, []);
-  const authors = new Set(topics.map(t => t.author));
-  res.json({ topics: topics.length, replies: replies.length, views: topics.reduce((s, t) => s + t.views, 0), merchants: authors.size });
-});
-
-app.listen(PORT, () => {
-  console.log('🚀 速卖通招商论坛已启动: http://localhost:' + PORT);
+server.listen(PORT, () => {
+  console.log(`Forum running on port ${PORT}`);
 });

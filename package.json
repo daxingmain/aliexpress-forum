@@ -1,13 +1,11 @@
 {
   "name": "aliexpress-forum",
   "version": "1.0.0",
-  "description": "AliExpress Overseas Hosting Merchant Forum",
+  "description": "速卖通招商论坛",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "engines": {
     "node": ">=18.0.0"
